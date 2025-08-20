@@ -23,7 +23,6 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Get => {
             let git_request = Request::from_stdin()?;
-            eprintln!("{:?}", git_request);
             let conn = db::open()?;
             let creds = match db::fetch_login(&conn, &git_request) {
                 Ok(login) => login,

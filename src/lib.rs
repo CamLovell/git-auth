@@ -55,7 +55,6 @@ pub struct Login {
 impl Login {
     pub fn new(username: String, host: String, email: Option<String>) -> anyhow::Result<Self> {
         let entry = Entry::new("git-auth", &format!("{}@{}", username, host))?;
-        eprintln!("{}", &format!("\"{}@{}\"", username, host));
         Ok(Self {
             username,
             host,
@@ -68,7 +67,6 @@ impl Login {
     }
     pub fn set_password(&self, password: &str) -> anyhow::Result<()> {
         self.entry.set_password(password)?;
-        eprintln!("{} : {}", password, self.get_password()?);
         Ok(())
     }
 }

@@ -1,8 +1,18 @@
 use crate::{Login, Request};
+use anyhow::Context;
 use rusqlite::{Connection, Result, params};
+use std::{env, fs};
 
-pub fn open() -> Result<Connection> {
-    let conn = Connection::open("test.db")?;
+pub fn open() -> anyhow::Result<Connection> {
+    let path = env::home_dir()
+        .context("home is unknown")?
+        .join(".local/share/git-auth/creds.db");
+
+    if !path.parent().expect("parents must exits").exists() {
+        fs::create_dir_all(path.parent().expect("parents must exits"))?;
+    }
+
+    let conn = Connection::open(path)?;
 
     conn.execute("PRAGMA foreign_keys = ON", ())?;
     conn.execute(

@@ -3,15 +3,13 @@ use anyhow::{Context, anyhow};
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    fs,
     sync::mpsc::RecvTimeoutError,
     thread,
     time::{self, Duration},
 };
 
 pub fn get_login() -> anyhow::Result<Login> {
-    let client_id = fs::read_to_string("id.txt")?;
-    let client_id = client_id.trim().to_string();
+    let client_id = String::from("Ov23liAXHnUzobAF9AuF");
     let client = reqwest::blocking::Client::new();
 
     let device_code = get_device_code(&client, &client_id)?;
@@ -40,7 +38,7 @@ fn get_device_code(
         .json()?;
 
     eprintln!(
-        "Copy this code <{}> and follow the instructions here\n{}",
+        "Copy this code <{}> and follow the instructions at the link\n\t{}",
         response["user_code"]
             .as_str()
             .context("user_code not found in server resonse")?,
