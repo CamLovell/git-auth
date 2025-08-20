@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use git_auth::{GitRequest, db, github, send_creds};
+use git_auth::{Request, db, github, send_creds};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -22,12 +22,20 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Get => {
-            let git_request = GitRequest::from_stdin();
+            let git_request = Request::from_stdin()?;
             eprintln!("{:?}", git_request);
-            let creds = github::get_login()?;
             let conn = db::open()?;
-            db::add_login(&conn, &creds)?;
-            send_creds(&creds);
+            let creds = match db::fetch_login(&conn, &git_request) {
+                Ok(login) => login,
+                Err(_) => {
+                    let creds = github::get_login()?;
+                    let user_id = db::add_login(&conn, &creds)?;
+                    db::add_request(&conn, &git_request, &user_id)?;
+                    creds
+                }
+            };
+
+            send_creds(&creds)?;
         }
         Commands::Init => eprintln!("Initialising"),
         Commands::Store => eprintln!("Storeing"),

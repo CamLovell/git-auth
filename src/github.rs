@@ -19,12 +19,9 @@ pub fn get_login() -> anyhow::Result<Login> {
     let username = query_username(&client, &token)?;
     let email = query_email(&client, &token)?;
 
-    Ok(Login {
-        username,
-        email,
-        host: String::from("github.com"),
-        password: token,
-    })
+    let login = Login::new(username, String::from("github.com"), email)?;
+    login.set_password(&token)?;
+    Ok(login)
 }
 
 fn get_device_code(

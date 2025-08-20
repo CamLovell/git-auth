@@ -1,4 +1,5 @@
 use anyhow::Context;
+use keyring::Entry;
 use std::{
     collections::HashMap,
     io::{self, Read},
@@ -11,13 +12,13 @@ pub mod github;
 
 #[allow(dead_code)] // Complains because it isn't used anywhere in lib.rs
 #[derive(Debug)]
-pub struct GitRequest {
+pub struct Request {
     host: String,
     protocol: String,
     path: Option<String>,
 }
 
-impl GitRequest {
+impl Request {
     pub fn from_stdin() -> anyhow::Result<Self> {
         let mut buf = String::new();
         // TODO: Proper error handling!
@@ -30,7 +31,7 @@ impl GitRequest {
             })
             .collect();
 
-        Ok(GitRequest {
+        Ok(Request {
             protocol: stdin_info
                 .get("protocol")
                 .context("protocol not provided")?
@@ -48,11 +49,33 @@ pub struct Login {
     pub username: String,
     pub host: String,
     pub email: Option<String>,
-    pub password: String,
+    entry: Entry,
 }
 
-pub fn send_creds(creds: &Login) {
+impl Login {
+    pub fn new(username: String, host: String, email: Option<String>) -> anyhow::Result<Self> {
+        let entry = Entry::new("git-auth", &format!("{}@{}", username, host))?;
+        eprintln!("{}", &format!("\"{}@{}\"", username, host));
+        Ok(Self {
+            username,
+            host,
+            email,
+            entry,
+        })
+    }
+    pub fn get_password(&self) -> anyhow::Result<String> {
+        Ok(self.entry.get_password()?)
+    }
+    pub fn set_password(&self, password: &str) -> anyhow::Result<()> {
+        self.entry.set_password(password)?;
+        eprintln!("{} : {}", password, self.get_password()?);
+        Ok(())
+    }
+}
+
+pub fn send_creds(creds: &Login) -> anyhow::Result<()> {
     println!("username={}", creds.username);
-    println!("password={}", creds.password);
+    println!("password={}", creds.get_password()?);
     println!("quit=1");
+    Ok(())
 }

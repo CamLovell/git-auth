@@ -1,4 +1,4 @@
-use crate::Login;
+use crate::{Login, Request};
 use rusqlite::{Connection, Result, params};
 
 pub fn open() -> Result<Connection> {
@@ -17,11 +17,11 @@ pub fn open() -> Result<Connection> {
     )?;
 
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS loactions (
+        "CREATE TABLE IF NOT EXISTS requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             protocol TEXT NOT NULL,
             host TEXT NOT NULL,
-            owner TEXT,
+            path TEXT,
             user_id INTEGER,
             FOREIGN KEY (user_id) REFERENCES logins (id)
         )
@@ -38,4 +38,28 @@ pub fn add_login(conn: &Connection, login: &Login) -> Result<i64> {
         params![login.username, login.email, login.host],
     )?;
     Ok(conn.last_insert_rowid())
+}
+
+pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO requests (protocol, path, host, user_id) VALUES (?1, ?2, ?3, ?4)",
+        params![request.protocol, request.path, request.host, user_id],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn fetch_login(conn: &Connection, request: &Request) -> anyhow::Result<Login> {
+    let (username, email) = conn.query_row(
+        "
+        SELECT l.username, l.email
+        FROM requests r
+        JOIN logins l ON r.user_id = l.id
+        WHERE r.host = ?1
+          AND r.path = ?2
+          AND r.protocol = ?3
+        ",
+        params![request.host, request.path, request.protocol],
+        |row| Ok((row.get("username")?, row.get("email")?)),
+    )?;
+    Login::new(username, request.host.clone(), email)
 }
