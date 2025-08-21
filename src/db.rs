@@ -71,10 +71,10 @@ pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> Resul
     Ok(conn.last_insert_rowid())
 }
 
-pub fn fetch_login(conn: &Connection, request: &Request) -> Result<Login> {
+pub fn fetch_login(conn: &Connection, request: &Request) -> Result<(Login, bool)> {
     conn.query_row(
         "
-        SELECT l.username, l.email
+        SELECT l.username, l.email, r.valid
         FROM requests r
         JOIN logins l ON r.user_id = l.id
         WHERE r.host = ?1
@@ -83,10 +83,13 @@ pub fn fetch_login(conn: &Connection, request: &Request) -> Result<Login> {
         ",
         params![request.host, request.path, request.protocol],
         |row| {
-            Ok(Login::new(
-                row.get("username")?,
-                request.host.clone(),
-                row.get("email")?,
+            Ok((
+                Login::new(
+                    row.get("username")?,
+                    request.host.clone(),
+                    row.get("email")?,
+                ),
+                row.get("valid")?,
             ))
         },
     )
