@@ -15,7 +15,7 @@ pub mod github;
 pub struct Request {
     pub host: String,
     protocol: String,
-    path: Option<String>,
+    pub path: Option<String>,
 }
 
 impl Request {

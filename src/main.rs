@@ -88,13 +88,20 @@ fn get() -> anyhow::Result<()> {
     send_creds(&creds)
 }
 
-fn store() -> anyhow::Result<usize> {
+fn store() -> anyhow::Result<()> {
     let git_request = Request::from_stdin()?;
     let conn = db::open()?;
-    // match db::fetch_login(&conn, &git_request) {}
-    let disp_str = format!("Storing valid credential for {}", git_request.host);
-    eprintln!("{}", disp_str.green().bold());
-    Ok(db::validate_request(&conn, &git_request, true)?)
+    if let (login, false) = db::fetch_login(&conn, &git_request)? {
+        let disp_str = format!(
+            "Storing valid credential {} for {}/{}",
+            login.username,
+            git_request.host,
+            git_request.path.as_deref().unwrap_or("")
+        );
+        eprintln!("{}", disp_str.green().bold());
+        db::validate_request(&conn, &git_request, true)?;
+    }
+    Ok(())
 }
 
 fn erase() -> anyhow::Result<usize> {
