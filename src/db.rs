@@ -32,6 +32,7 @@ pub fn open() -> anyhow::Result<Connection> {
             protocol TEXT NOT NULL,
             host TEXT NOT NULL,
             path TEXT,
+            valid BOOLEAN NOT NULL DEFAULT 0,
             user_id INTEGER,
             FOREIGN KEY (user_id) REFERENCES logins (id)
         )
@@ -50,6 +51,18 @@ pub fn add_login(conn: &Connection, login: &Login) -> Result<i64> {
     Ok(conn.last_insert_rowid())
 }
 
+pub fn validate_request(conn: &Connection, request: &Request, valid: bool) -> Result<usize> {
+    conn.execute(
+        "
+        UPDATE requests
+        SET valid = ?1
+        WHERE host = ?2
+            AND path = ?3
+            AND protocol = ?4
+        ",
+        params![valid, request.host, request.path, request.protocol],
+    )
+}
 pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> Result<i64> {
     conn.execute(
         "INSERT INTO requests (protocol, path, host, user_id) VALUES (?1, ?2, ?3, ?4)",
@@ -58,8 +71,8 @@ pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> Resul
     Ok(conn.last_insert_rowid())
 }
 
-pub fn fetch_login(conn: &Connection, request: &Request) -> anyhow::Result<Login> {
-    let (username, email) = conn.query_row(
+pub fn fetch_login(conn: &Connection, request: &Request) -> Result<Login> {
+    conn.query_row(
         "
         SELECT l.username, l.email
         FROM requests r
@@ -69,7 +82,24 @@ pub fn fetch_login(conn: &Connection, request: &Request) -> anyhow::Result<Login
           AND r.protocol = ?3
         ",
         params![request.host, request.path, request.protocol],
-        |row| Ok((row.get("username")?, row.get("email")?)),
-    )?;
-    Login::new(username, request.host.clone(), email)
+        |row| {
+            Ok(Login::new(
+                row.get("username")?,
+                request.host.clone(),
+                row.get("email")?,
+            ))
+        },
+    )
+}
+
+pub fn fetch_available_logins(conn: &Connection, request: &Request) -> Result<Vec<Login>> {
+    let mut stmt = conn.prepare("SELECT username, email FROM logins WHERE host = ?1")?;
+    stmt.query_map(params![request.host], |row| {
+        Ok(Login::new(
+            row.get("username")?,
+            request.host.clone(),
+            row.get("email")?,
+        ))
+    })?
+    .collect()
 }

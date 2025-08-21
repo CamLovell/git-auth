@@ -1,5 +1,6 @@
 use crate::Login;
 use anyhow::{Context, anyhow};
+use colored::Colorize;
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -17,7 +18,7 @@ pub fn get_login() -> anyhow::Result<Login> {
     let username = query_username(&client, &token)?;
     let email = query_email(&client, &token)?;
 
-    let login = Login::new(username, String::from("github.com"), email)?;
+    let login = Login::new(username, String::from("github.com"), email);
     login.set_password(&token)?;
     Ok(login)
 }
@@ -41,10 +42,14 @@ fn get_device_code(
         "Copy this code <{}> and follow the instructions at the link\n\t{}",
         response["user_code"]
             .as_str()
-            .context("user_code not found in server resonse")?,
+            .context("user_code not found in server resonse")?
+            .green()
+            .bold(),
         response["verification_uri"]
             .as_str()
             .context("verification_uri not found in server resonse")?
+            .blue()
+            .underline()
     );
 
     Ok(response["device_code"]

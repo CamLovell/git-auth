@@ -13,7 +13,7 @@ pub mod github;
 #[allow(dead_code)] // Complains because it isn't used anywhere in lib.rs
 #[derive(Debug)]
 pub struct Request {
-    host: String,
+    pub host: String,
     protocol: String,
     path: Option<String>,
 }
@@ -45,28 +45,39 @@ impl Request {
     }
 }
 
+#[derive(Clone)]
 pub struct Login {
     pub username: String,
     pub host: String,
     pub email: Option<String>,
-    entry: Entry,
 }
 
 impl Login {
-    pub fn new(username: String, host: String, email: Option<String>) -> anyhow::Result<Self> {
-        let entry = Entry::new("git-auth", &format!("{}@{}", username, host))?;
-        Ok(Self {
+    pub fn new(username: String, host: String, email: Option<String>) -> Self {
+        Self {
             username,
             host,
             email,
-            entry,
-        })
+        }
     }
+
+    fn entry(&self) -> Entry {
+        let identifier = format!("{}@{}", self.username, self.host);
+        match Entry::new("git-auth", &identifier) {
+            Ok(entry) => entry,
+            Err(keyring::error::Error::TooLong(_, max)) => {
+                Entry::new("git-auth", identifier.split_at(max as usize).0)
+                    .expect("Expected entry creation success after handling length")
+            }
+            Err(err) => panic!("Unrecoverable error in login creation:\n{err}"),
+        }
+    }
+
     pub fn get_password(&self) -> anyhow::Result<String> {
-        Ok(self.entry.get_password()?)
+        Ok(self.entry().get_password()?)
     }
     pub fn set_password(&self, password: &str) -> anyhow::Result<()> {
-        self.entry.set_password(password)?;
+        self.entry().set_password(password)?;
         Ok(())
     }
 }
