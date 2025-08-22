@@ -1,7 +1,9 @@
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use git_auth::{Request, db, github, send_creds};
 use inquire::{Confirm, Select};
+use std::{env, fs, process::Command};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -16,6 +18,8 @@ enum Commands {
     Get,
     Store,
     Erase,
+    Purge,
+    Init,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -24,6 +28,12 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Init => {
+            init()?;
+        }
+        Commands::Purge => {
+            purge()?;
+        }
         Commands::Get => {
             get()?;
         }
@@ -34,6 +44,44 @@ fn main() -> anyhow::Result<()> {
             erase()?;
         }
     };
+    Ok(())
+}
+
+fn init() -> anyhow::Result<()> {
+    let exe_path = env::current_exe().expect("I mean, we are running??");
+    let exe_path = String::from("!") + exe_path.to_str().context("Failed to get exe as sting")?;
+
+    Command::new("git")
+        .args(["config", "set", "--global", "credential.helper", &exe_path])
+        .output()?;
+
+    Command::new("git")
+        .args([
+            "config",
+            "set",
+            "--global",
+            "credential.usehttppath",
+            "true",
+        ])
+        .output()?;
+
+    Command::new("git")
+        .args(["config", "--global", "alias.auth", &exe_path])
+        .output()?;
+
+    Ok(())
+}
+
+fn purge() -> anyhow::Result<()> {
+    let path = env::home_dir()
+        .context("home is unknown")?
+        .join(".local/share/git-auth/creds.db");
+
+    if path.exists() {
+        fs::remove_file(path)?;
+    } else {
+        eprintln!("No database, nothing to do");
+    }
     Ok(())
 }
 
