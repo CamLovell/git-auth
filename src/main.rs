@@ -144,7 +144,10 @@ fn store() -> anyhow::Result<()> {
 fn erase() -> anyhow::Result<usize> {
     let git_request = Request::from_stdin()?;
     let conn = db::open()?;
-    let disp_str = format!("Invalidating existing credential for {}", git_request.host);
-    eprintln!("{}", disp_str.red().bold());
+    eprintln!(
+        "Existing credential for {} found to be {}.\nRe-run your command to obtian a new login\n",
+        git_request.host,
+        "invalid".red().bold()
+    );
     Ok(db::validate_request(&conn, &git_request, false)?)
 }
