@@ -2,6 +2,7 @@ use anyhow::Context;
 use keyring::Entry;
 use std::{
     collections::HashMap,
+    fmt::Display,
     io::{self, Read},
 };
 
@@ -79,6 +80,15 @@ impl Login {
     pub fn set_password(&self, password: &str) -> anyhow::Result<()> {
         self.entry().set_password(password)?;
         Ok(())
+    }
+}
+
+impl Display for Login {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.email {
+            Some(email) => write!(f, "{}, ({})", self.username, email),
+            None => write!(f, "{}", self.username),
+        }
     }
 }
 

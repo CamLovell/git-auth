@@ -91,9 +91,9 @@ fn get() -> anyhow::Result<()> {
     let creds = match db::fetch_login(&conn, &git_request) {
         Ok((login, true)) => login,
         Ok((login, false)) => {
-            if Confirm::new("Existing login found but may be invalid. Try anyway? [y/n]")
-                .prompt()
-                .expect("should not fail")
+            if Confirm::new("Existing login found but may be invalid. Try anyway?")
+                .with_default(false)
+                .prompt()?
             {
                 login
             } else {
@@ -102,29 +102,18 @@ fn get() -> anyhow::Result<()> {
         }
         Err(_) => {
             let logins = db::fetch_available_logins(&conn, &git_request)?;
-            let options: Vec<_> = logins
-                .iter()
-                .map(|l| match &l.email {
-                    Some(email) => format!("{} ({})", l.username, email),
-                    None => l.username.to_string(),
-                })
-                .collect();
-
             let creds = if logins.is_empty()
                 || Confirm::new("No login found, create new?")
-                    .prompt()
-                    .expect("should not fail")
+                    .with_default(true)
+                    .prompt()?
             {
                 github::get_login()?
             } else {
-                let ans = Select::new("select existing or create", options.clone())
+                Select::new("select existing or create", logins)
+                    .without_help_message()
+                    .without_filtering()
                     .with_vim_mode(true)
-                    .prompt()?;
-                let idx = options
-                    .iter()
-                    .position(|o| o == &ans)
-                    .expect("selected option must exist");
-                logins[idx].clone()
+                    .prompt()?
             };
 
             let user_id = db::add_login(&conn, &creds)?;
