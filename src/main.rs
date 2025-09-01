@@ -17,11 +17,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    // Get a credential
+    /// (called by git) Retrieve a credential for a given host/protocol/path
     Get,
+    /// (called by git) "Store" credential, for us mark as valid
     Store,
+    /// (called by git) "Erase" credential, for us mark as invalid
     Erase,
+    /// Delete credentials database
     Purge,
+    /// Initialise git-auth, setting expected git config etc.
     Init,
 }
 
