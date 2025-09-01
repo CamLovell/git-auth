@@ -7,7 +7,15 @@ git-auth supports multiple accounts and will remember which accounts are associa
 Just `push`, `pull`, `clone`, etc. and the rest will be taken care of.
 
 ## Installation
-No packages yet, that will come at some point.
+There are no distro-specific packages (yet hopefully).
+
+### Cargo
+git-auth is available through [cargo](https://crates.io/crates/git-auth). To install simply run:
+```bash
+cargo install git-auth
+```
+
+Assuming your [path is setup for cargo](https://doc.rust-lang.org/book/ch14-04-installing-binaries.html) installed binaries the command `git-auth` should now be available!
 
 ### Build from source
 1. Install rust toolchain ([rustup](https://rustup.rs/) is simple but however you would like)
@@ -32,11 +40,12 @@ The goal is to be as simple as possible, once installed there is only one manual
 ```bash
 git-auth init
 ```
-If you are running it from the repository roots the command will be something like:
+
+If you built from source and are in the repository root the command will be something like:
 ```bash
 ./target/release/git-auth init
 ```
-Or refer to the tip above!
+(Or refer to the tip above!)
 
 Now just got about your work! When git needs permissions for some remote you will be prompted accordingly,
 no need to think about credentials anymore.
