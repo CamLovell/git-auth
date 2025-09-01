@@ -1,15 +1,13 @@
-use crate::Login;
-use anyhow::{Context, anyhow};
+use crate::{Login, error::GithubError};
 use colored::Colorize;
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    sync::mpsc::RecvTimeoutError,
     thread,
     time::{self, Duration},
 };
 
-pub fn get_login() -> anyhow::Result<Login> {
+pub fn get_login() -> Result<Login, GithubError> {
     let client_id = String::from("Ov23liAXHnUzobAF9AuF");
     let client = reqwest::blocking::Client::new();
 
@@ -26,7 +24,7 @@ pub fn get_login() -> anyhow::Result<Login> {
 fn get_device_code(
     reqwest_client: &reqwest::blocking::Client,
     client_id: &str,
-) -> anyhow::Result<String> {
+) -> Result<String, GithubError> {
     let params = [
         ("scope", "repo read:user user:email"),
         ("client_id", client_id),
@@ -40,21 +38,28 @@ fn get_device_code(
 
     eprintln!(
         "Copy this code <{}> and follow the instructions at the link\n\t{}",
-        response["user_code"]
+        response
+            .get("user_code")
+            .ok_or(GithubError::MissingField(String::from("user_code")))?
             .as_str()
-            .context("user_code not found in server resonse")?
+            .ok_or(GithubError::InvalidField(String::from("user_code")))?
             .green()
             .bold(),
-        response["verification_uri"]
+        response
+            .get("verification_uri")
+            .ok_or(GithubError::MissingField(String::from("verification_uri")))?
             .as_str()
-            .context("verification_uri not found in server resonse")?
+            .ok_or(GithubError::InvalidField(String::from("verification_uri")))?
             .blue()
             .underline()
     );
 
-    Ok(response["device_code"]
+    // TODO: Add expiry reading here so timeout is based on expiry
+    Ok(response
+        .get("device_code")
+        .ok_or(GithubError::MissingField(String::from("device_code")))?
         .as_str()
-        .context("device_code not found in server response")?
+        .ok_or(GithubError::InvalidField(String::from("device_code")))?
         .to_string())
 }
 
@@ -62,7 +67,7 @@ fn poll_for_auth(
     reqwest_client: &reqwest::blocking::Client,
     device_code: &str,
     client_id: &str,
-) -> anyhow::Result<String> {
+) -> Result<String, GithubError> {
     let poll_params = [
         ("device_code", device_code),
         ("client_id", client_id),
@@ -80,19 +85,19 @@ fn poll_for_auth(
             Some(token) => {
                 break Ok(token
                     .as_str()
-                    .context("Failed to convert token to string")?
+                    .ok_or(GithubError::InvalidField(String::from("access_token")))?
                     .to_string());
             }
             None => {
-                // TODO: Read expiry from initial api respinse
+                // TODO: Read expiry from initial api response
                 if time::SystemTime::now()
-                    .duration_since(loop_start)?
+                    .duration_since(loop_start)
+                    .expect("now cannot be before loop_start")
                     .as_secs()
                     > 900
                 {
-                    // TODO: This feels bad, fix it
                     eprintln!("Code has expired, exiting");
-                    break Err(anyhow!(RecvTimeoutError::Timeout));
+                    break Err(GithubError::Timeout(900));
                 }
                 thread::sleep(Duration::from_secs(5));
             }
@@ -103,7 +108,7 @@ fn poll_for_auth(
 fn query_username(
     reqwest_client: &reqwest::blocking::Client,
     token: &str,
-) -> anyhow::Result<String> {
+) -> Result<String, GithubError> {
     let res: HashMap<String, Value> = reqwest_client
         .get("https://api.github.com/user")
         .header("User-Agent", "git-auth")
@@ -111,16 +116,18 @@ fn query_username(
         .header("Authorization", format!("token {token}"))
         .send()?
         .json()?;
-    Ok(res["login"]
+    Ok(res
+        .get("login")
+        .ok_or(GithubError::MissingField(String::from("login")))?
         .as_str()
-        .context("login not present in user request")?
+        .ok_or(GithubError::InvalidField(String::from("login")))?
         .to_string())
 }
 
 fn query_email(
     reqwest_client: &reqwest::blocking::Client,
     token: &str,
-) -> anyhow::Result<Option<String>> {
+) -> Result<Option<String>, GithubError> {
     let res: Vec<Value> = reqwest_client
         .get("https://api.github.com/user/emails")
         .header("User-Agent", "git-auth")

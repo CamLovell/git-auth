@@ -1,4 +1,3 @@
-use anyhow::Context;
 use keyring::Entry;
 use std::{
     collections::HashMap,
@@ -7,7 +6,10 @@ use std::{
 };
 
 pub mod db;
+pub mod error;
 pub mod github;
+
+use error::GitError;
 
 // TODO: Some of the contexts could be simplified to expects
 
@@ -20,9 +22,8 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn from_stdin() -> anyhow::Result<Self> {
+    pub fn from_stdin() -> Result<Self, GitError> {
         let mut buf = String::new();
-        // TODO: Proper error handling!
         let _ = io::stdin().read_to_string(&mut buf)?;
         let stdin_info: HashMap<String, String> = buf
             .lines()
@@ -35,11 +36,11 @@ impl Request {
         Ok(Request {
             protocol: stdin_info
                 .get("protocol")
-                .context("protocol not provided")?
+                .ok_or(GitError::MissingInfo(String::from("protocol")))?
                 .to_string(),
             host: stdin_info
                 .get("host")
-                .context("host not provided")?
+                .ok_or(GitError::MissingInfo(String::from("host")))?
                 .to_string(),
             path: stdin_info.get("path").cloned(),
         })
@@ -74,12 +75,11 @@ impl Login {
         }
     }
 
-    pub fn get_password(&self) -> anyhow::Result<String> {
-        Ok(self.entry().get_password()?)
+    pub fn get_password(&self) -> keyring::Result<String> {
+        self.entry().get_password()
     }
-    pub fn set_password(&self, password: &str) -> anyhow::Result<()> {
-        self.entry().set_password(password)?;
-        Ok(())
+    pub fn set_password(&self, password: &str) -> keyring::Result<()> {
+        self.entry().set_password(password)
     }
 }
 
@@ -92,7 +92,7 @@ impl Display for Login {
     }
 }
 
-pub fn send_creds(creds: &Login) -> anyhow::Result<()> {
+pub fn send_creds(creds: &Login) -> keyring::Result<()> {
     println!("username={}", creds.username);
     println!("password={}", creds.get_password()?);
     println!("quit=1");

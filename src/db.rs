@@ -1,18 +1,17 @@
-use crate::{Login, Request};
-use anyhow::Context;
-use rusqlite::{Connection, Result, params};
+use crate::{Login, Request, error::DatabaseError};
+use rusqlite::{Connection, params};
 use std::{env, fs};
 
-pub fn open() -> anyhow::Result<Connection> {
+pub fn open() -> Result<Connection, DatabaseError> {
     let path = env::home_dir()
-        .context("home is unknown")?
-        .join(".local/share/git-auth/creds.db");
+        .ok_or(DatabaseError::Path)?
+        .join(".local/share/git-auth");
 
-    if !path.parent().expect("parents must exits").exists() {
-        fs::create_dir_all(path.parent().expect("parents must exits"))?;
+    if !path.exists() {
+        fs::create_dir_all(&path)?;
     }
 
-    let conn = Connection::open(path)?;
+    let conn = Connection::open(path.join("creds.db"))?;
 
     conn.execute("PRAGMA foreign_keys = ON", ())?;
     conn.execute(
@@ -43,7 +42,7 @@ pub fn open() -> anyhow::Result<Connection> {
     Ok(conn)
 }
 
-pub fn add_login(conn: &Connection, login: &Login) -> Result<i64> {
+pub fn add_login(conn: &Connection, login: &Login) -> rusqlite::Result<i64> {
     conn.execute(
         "INSERT INTO logins (username, email, host) VALUES (?1, ?2, ?3)",
         params![login.username, login.email, login.host],
@@ -51,7 +50,7 @@ pub fn add_login(conn: &Connection, login: &Login) -> Result<i64> {
     Ok(conn.last_insert_rowid())
 }
 
-pub fn validate_request(conn: &Connection, request: &Request, valid: bool) -> Result<usize> {
+pub fn validate_request(conn: &Connection, request: &Request, valid: bool) -> rusqlite::Result<()> {
     conn.execute(
         "
         UPDATE requests
@@ -61,9 +60,10 @@ pub fn validate_request(conn: &Connection, request: &Request, valid: bool) -> Re
             AND protocol = ?4
         ",
         params![valid, request.host, request.path, request.protocol],
-    )
+    )?;
+    Ok(())
 }
-pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> Result<i64> {
+pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> rusqlite::Result<i64> {
     conn.execute(
         "INSERT INTO requests (protocol, path, host, user_id) VALUES (?1, ?2, ?3, ?4)",
         params![request.protocol, request.path, request.host, user_id],
@@ -71,7 +71,7 @@ pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> Resul
     Ok(conn.last_insert_rowid())
 }
 
-pub fn fetch_login(conn: &Connection, request: &Request) -> Result<(Login, bool)> {
+pub fn fetch_login(conn: &Connection, request: &Request) -> rusqlite::Result<(Login, bool)> {
     conn.query_row(
         "
         SELECT l.username, l.email, r.valid
@@ -95,7 +95,10 @@ pub fn fetch_login(conn: &Connection, request: &Request) -> Result<(Login, bool)
     )
 }
 
-pub fn fetch_available_logins(conn: &Connection, request: &Request) -> Result<Vec<Login>> {
+pub fn fetch_available_logins(
+    conn: &Connection,
+    request: &Request,
+) -> rusqlite::Result<Vec<Login>> {
     let mut stmt = conn.prepare("SELECT username, email FROM logins WHERE host = ?1")?;
     stmt.query_map(params![request.host], |row| {
         Ok(Login::new(

@@ -1,7 +1,10 @@
-use anyhow::Context;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use git_auth::{Request, db, github, send_creds};
+use git_auth::{
+    Request, db,
+    error::{DatabaseError, Error, GithubError},
+    github, send_creds,
+};
 use inquire::{Confirm, Select};
 use std::{env, fs, process::Command};
 
@@ -22,17 +25,17 @@ enum Commands {
     Init,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Error> {
     // Force colours
     colored::control::set_override(true);
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Init => {
-            init()?;
+            init();
         }
         Commands::Purge => {
-            purge()?;
+            purge();
         }
         Commands::Get => {
             get()?;
@@ -47,15 +50,32 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn init() -> anyhow::Result<()> {
+fn init() {
     let exe_path = env::current_exe().expect("I mean, we are running??");
-    let exe_path = String::from("!") + exe_path.to_str().context("Failed to get exe as sting")?;
+    let exe_path = String::from("!")
+        + exe_path
+            .to_str()
+            .expect("exe path should be able to be a string");
 
-    Command::new("git")
+    if let Err(err) = Command::new("git")
         .args(["config", "set", "--global", "credential.helper", &exe_path])
-        .output()?;
+        .output()
+    {
+        eprintln!(
+            "{} setting credential helper: {}",
+            "Error".red().bold(),
+            err
+        );
+        let config_cmd = format!("git config set --global credential.helper {}", exe_path);
+        eprintln!(
+            "\tTo set this manually either run:\n\n\t{}\n",
+            config_cmd.cyan()
+        );
+        let config_item = format!("[credential]\n\thelper={}", exe_path);
+        eprintln!("Or add this to your .gitconfig\n\t{}", config_item.cyan());
+    }
 
-    Command::new("git")
+    if let Err(err) = Command::new("git")
         .args([
             "config",
             "set",
@@ -63,29 +83,59 @@ fn init() -> anyhow::Result<()> {
             "credential.usehttppath",
             "true",
         ])
-        .output()?;
-
-    Command::new("git")
-        .args(["config", "--global", "alias.auth", &exe_path])
-        .output()?;
-
-    Ok(())
-}
-
-fn purge() -> anyhow::Result<()> {
-    let path = env::home_dir()
-        .context("home is unknown")?
-        .join(".local/share/git-auth/creds.db");
-
-    if path.exists() {
-        fs::remove_file(path)?;
-    } else {
-        eprintln!("No database, nothing to do");
+        .output()
+    {
+        eprintln!(
+            "{} changing credential settings: {}",
+            "Error".red().bold(),
+            err
+        );
+        eprintln!(
+            "\tTo set this manually either run:\n\n\t{}\n",
+            "git config set --global credential.usehttppath true".cyan()
+        );
+        eprintln!(
+            "Or add this to your .gitconfig\n\t{}",
+            "[credential]\n\tusehttppath=true".cyan()
+        );
     }
-    Ok(())
+
+    if let Err(err) = Command::new("git")
+        .args(["config", "--global", "alias.auth", &exe_path])
+        .output()
+    {
+        eprintln!("{} setting git-auth alias: {}", "Error".red().bold(), err);
+        let config_cmd = format!("git config --global alias.auth {}", exe_path);
+        eprintln!(
+            "\tTo set this manually either run:\n\n\t{}\n",
+            config_cmd.cyan()
+        );
+        let config_item = format!("[alias]\n\tauth={}", exe_path);
+        eprintln!("Or add this to your .gitconfig\n\t{}", config_item.cyan());
+    }
 }
 
-fn get() -> anyhow::Result<()> {
+fn purge() {
+    let path = match env::home_dir() {
+        Some(p) => p.join(".local/share/git-auth/creds.db"),
+        None => {
+            eprintln!("Error purging: {}", "home_dir not defined".red());
+            return;
+        }
+    };
+
+    // TODO: Add removal of passwords from keyring to purge
+    if path.exists() {
+        match fs::remove_file(path) {
+            Ok(_) => eprintln!("Purge success"),
+            Err(err) => eprintln!("Error purging: {err}"),
+        }
+    } else {
+        eprintln!("No database, nothing to do")
+    }
+}
+
+fn get() -> Result<(), Error> {
     let git_request = Request::from_stdin()?;
     let conn = db::open()?;
     let creds = match db::fetch_login(&conn, &git_request) {
@@ -101,7 +151,8 @@ fn get() -> anyhow::Result<()> {
             }
         }
         Err(_) => {
-            let logins = db::fetch_available_logins(&conn, &git_request)?;
+            let logins =
+                db::fetch_available_logins(&conn, &git_request).map_err(DatabaseError::from)?;
             let creds = if logins.is_empty()
                 || Confirm::new("No login found, create new?")
                     .with_default(true)
@@ -116,19 +167,20 @@ fn get() -> anyhow::Result<()> {
                     .prompt()?
             };
 
-            let user_id = db::add_login(&conn, &creds)?;
-            db::add_request(&conn, &git_request, &user_id)?;
+            let user_id = db::add_login(&conn, &creds).map_err(DatabaseError::from)?;
+            db::add_request(&conn, &git_request, &user_id).map_err(DatabaseError::from)?;
             creds
         }
     };
 
-    send_creds(&creds)
+    send_creds(&creds).map_err(GithubError::from)?;
+    Ok(())
 }
 
-fn store() -> anyhow::Result<()> {
+fn store() -> Result<(), Error> {
     let git_request = Request::from_stdin()?;
     let conn = db::open()?;
-    if let (login, false) = db::fetch_login(&conn, &git_request)? {
+    if let (login, false) = db::fetch_login(&conn, &git_request).map_err(DatabaseError::from)? {
         let disp_str = format!(
             "Storing valid credential {} for {}/{}",
             login.username,
@@ -136,12 +188,12 @@ fn store() -> anyhow::Result<()> {
             git_request.path.as_deref().unwrap_or("")
         );
         eprintln!("{}", disp_str.green().bold());
-        db::validate_request(&conn, &git_request, true)?;
+        db::validate_request(&conn, &git_request, true).map_err(DatabaseError::from)?;
     }
     Ok(())
 }
 
-fn erase() -> anyhow::Result<usize> {
+fn erase() -> Result<(), Error> {
     let git_request = Request::from_stdin()?;
     let conn = db::open()?;
     eprintln!(
@@ -149,5 +201,5 @@ fn erase() -> anyhow::Result<usize> {
         git_request.host,
         "invalid".red().bold()
     );
-    Ok(db::validate_request(&conn, &git_request, false)?)
+    Ok(db::validate_request(&conn, &git_request, false).map_err(DatabaseError::from)?)
 }
