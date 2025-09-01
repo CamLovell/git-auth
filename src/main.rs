@@ -130,9 +130,16 @@ fn purge() {
 
     // TODO: Add removal of passwords from keyring to purge
     if path.exists() {
-        match fs::remove_file(path) {
-            Ok(_) => eprintln!("Purge success"),
-            Err(err) => eprintln!("Error purging: {err}"),
+        if let Ok(true) = Confirm::new(
+            "This will erase ALL credentials for ALL remotes and repositories.\nAre you sure?",
+        )
+        .with_default(false)
+        .prompt()
+        {
+            match fs::remove_file(path) {
+                Ok(_) => eprintln!("Purge success"),
+                Err(err) => eprintln!("Error purging: {err}"),
+            }
         }
     } else {
         eprintln!("No database, nothing to do")
