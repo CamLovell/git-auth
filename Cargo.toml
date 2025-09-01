@@ -1,7 +1,13 @@
 [package]
 name = "git-auth"
+description = "A git credential helper that aims to integrate better with your git workflow"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/CamLovell/git-auth"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["git"]
+categories = ["command-line-utilities", "authentication"]
 
 [dependencies]
 clap = { version = "4.5.45", features = ["derive"] }
