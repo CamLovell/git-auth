@@ -128,22 +128,36 @@ fn purge() {
         }
     };
 
-    // TODO: Add removal of passwords from keyring to purge
-    if path.exists() {
-        if let Ok(true) = Confirm::new(
-            "This will erase ALL credentials for ALL remotes and repositories.\nAre you sure?",
-        )
-        .with_default(false)
-        .prompt()
-        {
-            match fs::remove_file(path) {
-                Ok(_) => eprintln!("Purge success"),
-                Err(err) => eprintln!("Error purging: {err}"),
-            }
-        }
-    } else {
-        eprintln!("No database, nothing to do")
+    if !path.exists() {
+        eprintln!("No database, nothing to do");
+        return;
     }
+
+    if !Confirm::new(
+        "This will erase ALL credentials for ALL remotes and repositories.\nAre you sure?",
+    )
+    .with_default(false)
+    .prompt()
+    .unwrap_or(false)
+    {
+        eprintln!("Purge canceled");
+        return;
+    }
+
+    match db::open().and_then(|c| db::fetch_all_logins(&c).map_err(DatabaseError::from)) {
+        Ok(logins) => logins.iter().for_each(|l| match l.delete_password() {
+            Ok(_) => eprintln!("Deleted login for: {l}"),
+            Err(err) => eprintln!("Failed to delete login for: {l}\nReason: {err}"),
+        }),
+        Err(err) => eprintln!("Error deleting passwords from keyring.\nReason: {err}"),
+    }
+
+    match fs::remove_file(path) {
+        Ok(_) => eprintln!("Database deleted"),
+        Err(err) => eprintln!("Error deleting databse: {err}"),
+    }
+
+    eprintln!("{}: purge complete!", "Success".green())
 }
 
 fn get() -> Result<(), Error> {

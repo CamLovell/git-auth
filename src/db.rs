@@ -109,3 +109,15 @@ pub fn fetch_available_logins(
     })?
     .collect()
 }
+
+pub fn fetch_all_logins(conn: &Connection) -> rusqlite::Result<Vec<Login>> {
+    let mut stmt = conn.prepare("SELECT username, email, host FROM logins")?;
+    stmt.query_map((), |row| {
+        Ok(Login::new(
+            row.get("username")?,
+            row.get("host")?,
+            row.get("email")?,
+        ))
+    })?
+    .collect()
+}

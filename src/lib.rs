@@ -81,6 +81,9 @@ impl Login {
     pub fn set_password(&self, password: &str) -> keyring::Result<()> {
         self.entry().set_password(password)
     }
+    pub fn delete_password(&self) -> keyring::Result<()> {
+        self.entry().delete_credential()
+    }
 }
 
 impl Display for Login {
