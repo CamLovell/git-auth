@@ -37,7 +37,7 @@ fn get_device_code(
         .json()?;
 
     eprintln!(
-        "Copy this code <{}> and follow the instructions at the link\n\t{}",
+        "Copy this code {} and follow the instructions at the link\n\t{}",
         response
             .get("user_code")
             .ok_or(GithubError::MissingField(String::from("user_code")))?
