@@ -48,6 +48,7 @@ fn main() -> Result<(), Error> {
             store()?;
         }
         Commands::Erase => {
+            eprintln!("ERASE");
             erase()?;
         }
     };
@@ -185,7 +186,7 @@ fn get() -> Result<(), Error> {
             {
                 github::get_login()?
             } else {
-                Select::new("select existing or create", logins)
+                Select::new("Select existing login:\n", logins)
                     .without_help_message()
                     .without_filtering()
                     .with_vim_mode(true)
@@ -208,9 +209,7 @@ fn store() -> Result<(), Error> {
     if let (login, false) = db::fetch_login(&conn, &git_request).map_err(DatabaseError::from)? {
         let disp_str = format!(
             "Storing valid credential {} for {}/{}",
-            login.username,
-            git_request.host,
-            git_request.path.as_deref().unwrap_or("")
+            login.username, git_request.host, git_request.path
         );
         eprintln!("{}", disp_str.green().bold());
         db::validate_request(&conn, &git_request, true).map_err(DatabaseError::from)?;

@@ -18,7 +18,7 @@ use error::GitError;
 pub struct Request {
     pub host: String,
     protocol: String,
-    pub path: Option<String>,
+    pub path: String,
 }
 
 impl Request {
@@ -42,8 +42,15 @@ impl Request {
                 .get("host")
                 .ok_or(GitError::MissingInfo(String::from("host")))?
                 .to_string(),
-            path: stdin_info.get("path").cloned(),
+            path: stdin_info
+                .get("path")
+                .ok_or(GitError::MissingInfo(String::from("path")))?
+                .to_string(),
         })
+    }
+
+    pub fn path_parent(&self) -> &str {
+        self.path.split_once("/").map_or(&self.path, |s| s.0)
     }
 }
 

@@ -8,6 +8,9 @@ pub enum GitError {
 
     #[error("Required info missing from input: {0:?}")]
     MissingInfo(String),
+
+    #[error("Provided information invalid: {0:?}")]
+    InvalidInfo(String),
 }
 
 #[derive(Error, Debug)]

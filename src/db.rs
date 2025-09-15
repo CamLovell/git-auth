@@ -56,17 +56,28 @@ pub fn validate_request(conn: &Connection, request: &Request, valid: bool) -> ru
         UPDATE requests
         SET valid = ?1
         WHERE host = ?2
-            AND path = ?3
+            AND path like ?3
             AND protocol = ?4
         ",
-        params![valid, request.host, request.path, request.protocol],
+        params![
+            valid,
+            request.host,
+            format!("{}%", request.path_parent()),
+            request.protocol
+        ],
     )?;
     Ok(())
 }
+
 pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> rusqlite::Result<i64> {
     conn.execute(
         "INSERT INTO requests (protocol, path, host, user_id) VALUES (?1, ?2, ?3, ?4)",
-        params![request.protocol, request.path, request.host, user_id],
+        params![
+            request.protocol,
+            request.path_parent(),
+            request.host,
+            user_id
+        ],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -78,10 +89,14 @@ pub fn fetch_login(conn: &Connection, request: &Request) -> rusqlite::Result<(Lo
         FROM requests r
         JOIN logins l ON r.user_id = l.id
         WHERE r.host = ?1
-          AND r.path = ?2
+          AND r.path LIKE ?2
           AND r.protocol = ?3
         ",
-        params![request.host, request.path, request.protocol],
+        params![
+            request.host,
+            format!("{}%", request.path_parent()),
+            request.protocol
+        ],
         |row| {
             Ok((
                 Login::new(
