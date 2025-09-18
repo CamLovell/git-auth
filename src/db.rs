@@ -45,11 +45,23 @@ pub fn open() -> Result<Connection, DatabaseError> {
 }
 
 pub fn add_login(conn: &Connection, login: &Login) -> rusqlite::Result<i64> {
-    conn.execute(
-        "INSERT INTO logins (username, email, host) VALUES (?1, ?2, ?3)",
+    conn.query_row(
+        "
+        SELECT id FROM logins
+        WHERE username = ?1
+          AND email = ?2
+          AND host = ?3
+        ",
         params![login.username, login.email, login.host],
-    )?;
-    Ok(conn.last_insert_rowid())
+        |row| row.get("id"),
+    )
+    .or_else(|_| {
+        conn.execute(
+            "INSERT INTO logins (username, email, host) VALUES (?1, ?2, ?3)",
+            params![login.username, login.email, login.host],
+        )?;
+        Ok(conn.last_insert_rowid())
+    })
 }
 
 pub fn validate_request(conn: &Connection, request: &Request, valid: bool) -> rusqlite::Result<()> {
