@@ -19,7 +19,9 @@ pub fn open() -> Result<Connection, DatabaseError> {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             email TEXT,
-            host TEXT NOT NULL
+            host TEXT NOT NULL,
+            CONSTRAINT username_unique UNIQUE (host, username),
+            CONSTRAINT email_unique UNIQUE (host, email)
         )
         ",
         (),
@@ -30,7 +32,7 @@ pub fn open() -> Result<Connection, DatabaseError> {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             protocol TEXT NOT NULL,
             host TEXT NOT NULL,
-            path TEXT,
+            owner TEXT,
             valid BOOLEAN NOT NULL DEFAULT 0,
             user_id INTEGER,
             FOREIGN KEY (user_id) REFERENCES logins (id)
@@ -56,28 +58,18 @@ pub fn validate_request(conn: &Connection, request: &Request, valid: bool) -> ru
         UPDATE requests
         SET valid = ?1
         WHERE host = ?2
-            AND path like ?3
+            AND owner = ?3
             AND protocol = ?4
         ",
-        params![
-            valid,
-            request.host,
-            format!("{}%", request.path_parent()),
-            request.protocol
-        ],
+        params![valid, request.host, request.owner, request.protocol],
     )?;
     Ok(())
 }
 
 pub fn add_request(conn: &Connection, request: &Request, user_id: &i64) -> rusqlite::Result<i64> {
     conn.execute(
-        "INSERT INTO requests (protocol, path, host, user_id) VALUES (?1, ?2, ?3, ?4)",
-        params![
-            request.protocol,
-            request.path_parent(),
-            request.host,
-            user_id
-        ],
+        "INSERT INTO requests (protocol, owner, host, user_id) VALUES (?1, ?2, ?3, ?4)",
+        params![request.protocol, request.owner, request.host, user_id],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -89,14 +81,10 @@ pub fn fetch_login(conn: &Connection, request: &Request) -> rusqlite::Result<(Lo
         FROM requests r
         JOIN logins l ON r.user_id = l.id
         WHERE r.host = ?1
-          AND r.path LIKE ?2
+          AND r.owner = ?2
           AND r.protocol = ?3
         ",
-        params![
-            request.host,
-            format!("{}%", request.path_parent()),
-            request.protocol
-        ],
+        params![request.host, request.owner, request.protocol],
         |row| {
             Ok((
                 Login::new(

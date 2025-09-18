@@ -48,7 +48,6 @@ fn main() -> Result<(), Error> {
             store()?;
         }
         Commands::Erase => {
-            eprintln!("ERASE");
             erase()?;
         }
     };
@@ -209,7 +208,7 @@ fn store() -> Result<(), Error> {
     if let (login, false) = db::fetch_login(&conn, &git_request).map_err(DatabaseError::from)? {
         let disp_str = format!(
             "Storing valid credential {} for {}/{}",
-            login.username, git_request.host, git_request.path
+            login.username, git_request.host, git_request.owner
         );
         eprintln!("{}", disp_str.green().bold());
         db::validate_request(&conn, &git_request, true).map_err(DatabaseError::from)?;
