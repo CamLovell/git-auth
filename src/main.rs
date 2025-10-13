@@ -3,7 +3,7 @@ use colored::Colorize;
 use git_auth::{
     Request, db,
     error::{DatabaseError, Error, GithubError},
-    github, send_creds,
+    github, prompt_login, send_creds,
 };
 use inquire::{Confirm, Select};
 use std::{env, fs, process::Command};
@@ -171,8 +171,11 @@ fn get() -> Result<(), Error> {
                 .prompt()?
             {
                 login
-            } else {
+            } else if git_request.host == "github.com" {
                 github::get_login()?
+            } else {
+                eprintln!("No automated method for this host, please enter information.");
+                prompt_login(&git_request)?
             }
         }
         Err(_) => {
@@ -183,7 +186,12 @@ fn get() -> Result<(), Error> {
                     .with_default(true)
                     .prompt()?
             {
-                github::get_login()?
+                if git_request.host == "github.com" {
+                    github::get_login()?
+                } else {
+                    eprintln!("No automated method for this host, please enter information.");
+                    prompt_login(&git_request)?
+                }
             } else {
                 Select::new("Select existing login:\n", logins)
                     .without_help_message()

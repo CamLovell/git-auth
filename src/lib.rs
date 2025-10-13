@@ -5,20 +5,20 @@ use std::{
     io::{self, Read},
 };
 
+use inquire::{Password, PasswordDisplayMode, Text};
+
 pub mod db;
 pub mod error;
 pub mod github;
 
 use error::GitError;
 
-// TODO: Some of the contexts could be simplified to expects
-
-#[allow(dead_code)] // Complains because it isn't used anywhere in lib.rs
 #[derive(Debug)]
 pub struct Request {
     pub host: String,
     protocol: String,
     pub owner: String,
+    pub username: Option<String>,
 }
 
 impl Request {
@@ -51,6 +51,7 @@ impl Request {
                     "Provided path not complete",
                 )))?
                 .to_string(),
+            username: stdin_info.get("username").map(|u| u.to_string()),
         })
     }
 }
@@ -63,6 +64,7 @@ pub struct Login {
 }
 
 impl Login {
+    // TODO: Change this to take a password too? remove public set_password?
     pub fn new(username: String, host: String, email: Option<String>) -> Self {
         Self {
             username,
@@ -108,4 +110,21 @@ pub fn send_creds(creds: &Login) -> keyring::Result<()> {
     println!("password={}", creds.get_password()?);
     println!("quit=1");
     Ok(())
+}
+
+pub fn prompt_login(git_request: &Request) -> Result<Login, error::Error> {
+    let login = Login::new(
+        match &git_request.username {
+            Some(u) => u.to_string(),
+            None => Text::new("Please enter your username:").prompt()?,
+        },
+        git_request.host.clone(), // TODO: How can I get around the clone here??
+        None,
+    );
+    let pass = Password::new("Please enter your password:")
+        .with_display_mode(PasswordDisplayMode::Masked)
+        .without_confirmation()
+        .prompt()?;
+    let _ = login.set_password(&pass); // TODO: Fix the error handling here
+    Ok(login)
 }
